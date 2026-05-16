@@ -126,6 +126,43 @@ Other fields to treat carefully:
 - `engagement_velocity`
 - Any feature that describes trend behavior after the trend has already happened.
 
+## No-Synthetic RQ1 Sensitivity Check
+
+An optional RQ1 sensitivity check removed synthetic, synthetic-derived, or cautionary fields from the already processed original-CSV feature set.
+
+Removed fields:
+
+- `dislikes`
+- `like_dislike_ratio`
+- `dislike_rate`
+- `title_length`
+- `has_emoji`
+- `avg_watch_time_sec`
+- `completion_rate`
+- `creator_avg_views`
+
+Feature-count change:
+
+- Original processed RQ1 feature count: `203`
+- No-synthetic/caution feature count: `195`
+
+Random Forest comparison:
+
+- Original processed validation macro F1: about `0.262`
+- No-synthetic/caution validation macro F1: about `0.242`
+- Original processed test macro F1: about `0.245`
+- No-synthetic/caution test macro F1: about `0.246`
+
+Interpretation:
+
+- Removing the flagged fields lowers validation performance slightly, but test performance is essentially unchanged.
+- This suggests the flagged fields contributed some model-usable signal on the validation split, but the benefit does not appear robust on the held-out test split.
+- In other words, the synthetic/caution columns may help the model fit one split slightly, but they do not materially improve generalization.
+- The original RQ1 finding is therefore not strongly dependent on the synthetic/caution fields.
+- The top features after removal are still mostly engagement variables, including `save_rate`, `saves`, `share_rate`, `comment_ratio`, `engagement_comment_rate`, `engagement_share_rate`, `views`, `comments`, and `like_rate`.
+- Feature-group importance remains dominated by `engagement_observed`, followed by `temporal` and `metadata`.
+- The cleaned version is methodologically safer, but it does not solve the weak predictive performance problem.
+
 ## Recommended Direction
 
 The more defensible path is to use the original CSV as the source of truth.
