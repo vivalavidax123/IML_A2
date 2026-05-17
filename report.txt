@@ -1,0 +1,518 @@
+COMP90049 Assignment 2 Report
+Group ID:
+Members:
+
+
+1. Introduction
+
+[Student drafting notes - rewrite into your own prose before submission.]
+
+General problem:
+- Short-form video platforms such as YouTube Shorts and TikTok receive very large volumes of uploaded content.
+- Platforms, creators, advertisers, and recommendation systems all benefit from understanding whether a video is likely to become rising, stable, declining, or seasonal.
+- Trend prediction is useful because it connects content metadata, engagement behaviour, creator information, and posting context to observable platform outcomes.
+
+Motivation:
+- Better trend prediction can support recommendation ranking, creator analytics, campaign planning, audience targeting, and content optimisation.
+- The problem is challenging because trend behaviour may depend on many interacting factors, including platform, region, category, hashtag, publication time, creator profile, and engagement metrics.
+- The project therefore investigates not only which model obtains the highest score, but also which feature groups and model families appear most useful.
+
+Dataset overview:
+- Dataset: YouTube Shorts and TikTok Trends 2025.
+- Main source file: data/youtube_shorts_tiktok_trends_2025.csv.
+- Original raw dataset shape: 48,079 rows and 58 columns.
+- Target labels: declining, rising, seasonal, stable.
+- The processed original dataset is approximately balanced:
+  - declining: about 24.97%.
+  - rising: about 25.17%.
+  - seasonal: about 25.26%.
+  - stable: about 24.60%.
+- Because the classes are close to balanced but all classes are equally important, macro F1 is used as the main evaluation metric alongside accuracy, precision, recall, and confusion matrices.
+
+Research questions:
+- RQ1: What factors, such as platform, region, content category, traffic source, and engagement metrics, most strongly influence video trend classification?
+- RQ2: How does the use of different feature groups, including content-related, platform-related, temporal, and creator-related features, affect prediction performance?
+- RQ3: How do traditional machine learning models compare with neural network models in predicting short-form video trend labels?
+
+Dataset suitability:
+- The dataset contains categorical metadata, temporal fields, creator fields, engagement counts, and engineered engagement ratios.
+- These fields support feature-importance analysis for RQ1, feature-group comparison for RQ2, and model-family comparison for RQ3.
+- The dataset is large enough to support stratified train, validation, and test splits.
+
+
+2. Literature Review
+
+[To be completed by group.]
+
+Suggested content to add:
+- Dataset reference: YouTube Shorts and TikTok Trends 2025.
+- At least two related papers on popularity prediction, social media engagement prediction, trend forecasting, or short-video recommendation.
+- For each paper, briefly state:
+  - what task it studied,
+  - what data/features/models it used,
+  - how it relates to this project.
+
+
+3. Method
+
+[Student drafting notes - rewrite into your own prose before submission.]
+
+3.1 Data Loading and Initial Checks
+
+Main dataset:
+- The main analysis used the original CSV rather than the ML-ready CSV because the original file contains the raw fields needed for transparent cleaning and feature-group analysis.
+- Original CSV shape: 48,079 rows and 58 columns.
+- The separate ML CSV has 50,000 rows and 32 columns, so it was treated as a cautionary comparison rather than the main source of evidence.
+
+Quality checks:
+- Duplicate rows were checked using the full dataframe.
+- Number of duplicate rows found: 0.
+- Missing values were checked column by column.
+- In the original CSV, all listed columns had 0 missing values in the preprocessing summary.
+- Unique-value counts were also inspected to identify identifiers, high-cardinality text fields, categorical variables, and numeric variables.
+
+Basic value cleaning:
+- The preprocessing notebook created a clean copy of the original dataframe.
+- Text columns were converted to string type, stripped of leading/trailing whitespace, and lowercased.
+- The approximate publish date field was parsed as a datetime.
+- Two transparent date features were created:
+  - publish_month.
+  - publish_day.
+
+3.2 Column Removal and Leakage Control
+
+Target:
+- The prediction target is trend_label.
+- trend_label was removed from the input matrix X and kept separately as y.
+
+Columns dropped in the main preprocessing pipeline:
+- row_id.
+- source_hint.
+- notes.
+- title.
+- title_keywords.
+- tags.
+- sample_comments.
+- author_handle.
+- music_track.
+- publish_date_approx.
+- year_month.
+- trend_duration_days.
+- trend_type.
+- engagement_velocity.
+
+Reasoning:
+- Identifier, notes, and free-text fields were removed because they either do not represent generalisable predictive features or require a separate NLP pipeline.
+- trend_duration_days, trend_type, and engagement_velocity were treated as leakage-prone because they can describe trend behaviour after the outcome is known.
+- The resulting raw feature matrix before one-hot encoding had 48,079 rows and 45 columns.
+
+Synthetic/caution-column sensitivity check:
+- The data dictionary marks some columns as synthetic or synthetic-like.
+- The project notes also identify columns that should be treated carefully because they may be synthetic, synthetic-derived, or leakage-prone.
+- A no-synthetic/caution sensitivity check removed the following fields from the already processed original feature set:
+  - dislikes.
+  - like_dislike_ratio.
+  - dislike_rate.
+  - title_length.
+  - has_emoji.
+  - avg_watch_time_sec.
+  - completion_rate.
+  - creator_avg_views.
+- Feature count changed from 203 encoded features to 195 encoded features.
+- This check did not materially improve test performance, but it is methodologically useful because it shows whether the main RQ1 findings depend on cautionary fields.
+
+Important wording for final report:
+- Do not say that all synthetic/caution columns were removed from the main reported model unless the cleaned no-synthetic pipeline is used as the main result.
+- Safer wording: "The main preprocessing removed obvious identifiers, text fields, and leakage-prone trend-duration fields. We also ran a sensitivity check that removed additional synthetic or cautionary columns."
+
+3.3 Feature Types and Feature Groups
+
+Feature types:
+- Numeric engagement counts: views, likes, comments, shares, saves.
+- Engagement ratios: engagement_rate, comment_ratio, share_rate, save_rate, like_rate, engagement_per_1k, and related rates.
+- Temporal fields: week_of_year, upload_hour, publish_dayofweek, publish_period, event_season, season, is_weekend, publish_month, publish_day.
+- Metadata fields: platform, country, region, language, category, hashtag, sound_type, device_type, device_brand, traffic_source.
+- Creator fields: creator_avg_views and creator_tier.
+- Basic content fields: genre, duration_sec, title_length, has_emoji.
+
+Feature groups used for RQ2:
+- all_features: 203 encoded columns.
+- metadata: 138 encoded columns.
+- temporal: 25 encoded columns.
+- engagement_observed: 20 encoded columns.
+- content_basic: 17 encoded columns.
+- creator: 3 encoded columns.
+
+3.4 Train, Validation, and Test Split
+
+Split design:
+- The original data was split into train, validation, and test sets.
+- Split ratio: 70% train, 15% validation, 15% test.
+- Stratification was used so that each split preserved the four-class label distribution.
+
+Processed split sizes:
+- Train: 33,655 samples.
+- Validation: 7,212 samples.
+- Test: 7,212 samples.
+
+Why this setup is appropriate:
+- A validation set allows hyperparameter selection without using the test set.
+- A held-out test set provides a final estimate of generalisation.
+- Stratification is appropriate because trend_label is a four-class target and each class should remain represented in every split.
+
+3.5 Encoding and Missing-Value Handling
+
+Encoding:
+- Categorical columns were one-hot encoded using pandas get_dummies.
+- Number of categorical columns encoded: 16.
+- Number of numeric columns kept before encoding expansion: 29.
+- Boolean columns were converted to 0/1 integer values.
+- Validation and test encoded matrices were reindexed to match the training columns, with unseen dummy columns filled as 0.
+
+Missing-value handling:
+- Numeric medians were computed from the training split.
+- Numeric missing values would be filled using those training medians.
+- In the observed preprocessing summary, the original columns had 0 missing values, but median imputation still makes the pipeline robust.
+
+Final encoded shapes:
+- Encoded train: 33,655 x 203.
+- Encoded validation: 7,212 x 203.
+- Encoded test: 7,212 x 203.
+
+3.6 Models and Evaluation
+
+RQ1 model:
+- Random Forest was used to evaluate influential factors because it provides feature-importance estimates and can model non-linear relationships.
+- A majority-class baseline was included for comparison.
+
+RQ2 models:
+- Logistic Regression.
+- KNN.
+- Random Forest.
+- Majority baseline.
+- These models were evaluated across individual feature groups and all features.
+
+RQ3 models:
+- Dummy Majority baseline.
+- Logistic Regression.
+- Linear SVM.
+- Decision Tree.
+- Random Forest.
+- MLP Neural Network.
+
+RQ3 validation-selected hyperparameters:
+- Dummy Majority: strategy=most_frequent.
+- Logistic Regression: C=0.1.
+- Linear SVM: C=1.0.
+- Decision Tree: max_depth=12, min_samples_leaf=20.
+- Random Forest: n_estimators=80, min_samples_leaf=5.
+- MLP Neural Network: hidden_layer_sizes=(64, 32), alpha=0.001.
+
+Evaluation metrics:
+- Accuracy: overall proportion of correct predictions.
+- Precision: how reliable each predicted class is.
+- Recall: how well each actual class is recovered.
+- Macro F1: main model-selection metric because it gives equal weight to each class.
+- Confusion matrix: used to inspect which trend classes are confused.
+
+
+4. Results
+
+[Student drafting notes - rewrite into your own prose before submission.]
+
+4.1 RQ1: Influential Factors
+
+RQ1 validation and test performance:
+
+| Model | Split | Accuracy | Macro F1 |
+|---|---|---:|---:|
+| Random Forest | Validation | 0.2622 | 0.2621 |
+| Majority baseline | Validation | 0.2526 | 0.1008 |
+| Random Forest | Test | 0.2454 | 0.2454 |
+| Majority baseline | Test | 0.2526 | 0.1008 |
+
+RQ1 validation class-level report for Random Forest:
+
+| Class | Precision | Recall | F1 |
+|---|---:|---:|---:|
+| declining | 0.250 | 0.248 | 0.249 |
+| rising | 0.264 | 0.273 | 0.268 |
+| seasonal | 0.289 | 0.279 | 0.284 |
+| stable | 0.246 | 0.248 | 0.247 |
+| macro avg | 0.262 | 0.262 | 0.262 |
+
+Top original features by Random Forest importance:
+
+| Rank | Original feature | Feature group | Importance |
+|---:|---|---|---:|
+| 1 | completion_rate | engagement_observed | 0.0332 |
+| 2 | save_rate | engagement_observed | 0.0326 |
+| 3 | creator_avg_views | creator | 0.0324 |
+| 4 | like_dislike_ratio | engagement_observed | 0.0321 |
+| 5 | dislike_rate | engagement_observed | 0.0320 |
+| 6 | avg_watch_time_sec | engagement_observed | 0.0312 |
+| 7 | comment_ratio | engagement_observed | 0.0312 |
+| 8 | share_rate | engagement_observed | 0.0311 |
+| 9 | engagement_share_rate | engagement_observed | 0.0308 |
+| 10 | saves | engagement_observed | 0.0305 |
+
+Feature-group importance from RQ1:
+
+| Feature group | Total importance |
+|---|---:|
+| engagement_observed | 0.6048 |
+| temporal | 0.1526 |
+| metadata | 0.1395 |
+| content_basic | 0.0707 |
+| creator | 0.0325 |
+
+RQ1 result notes:
+- Engagement-related variables dominate the importance ranking.
+- Temporal and metadata features contribute secondary signal.
+- Creator and basic content features have lower total importance in this run.
+- However, the overall Random Forest test macro F1 remains low, so these feature importances should be interpreted as weak exploratory associations rather than strong predictive evidence.
+- The optional no-synthetic/caution sensitivity check produced similar test performance, with Random Forest test macro F1 about 0.246 compared with about 0.245 for the main version.
+
+Figure 1. RQ1 feature importance plot.
+
+[Insert feature-importance figure from notebooks/rq1_influential_factors.ipynb.]
+
+Caption notes:
+- The plot should show that engagement_observed features account for most Random Forest importance.
+- Mention that high importance does not imply causal influence.
+
+4.2 RQ2: Feature Group Effectiveness
+
+Feature-group sizes after preprocessing:
+
+| Feature group | Number of encoded columns |
+|---|---:|
+| all_features | 203 |
+| metadata | 138 |
+| temporal | 25 |
+| engagement_observed | 20 |
+| content_basic | 17 |
+| creator | 3 |
+
+RQ2 validation results:
+
+| Model | Feature group | Columns | Accuracy | Macro F1 |
+|---|---|---:|---:|---:|
+| Random Forest | all_features | 203 | 0.2601 | 0.2600 |
+| KNN | metadata | 138 | 0.2546 | 0.2546 |
+| Random Forest | metadata | 138 | 0.2547 | 0.2545 |
+| KNN | temporal | 25 | 0.2539 | 0.2517 |
+| KNN | content_basic | 17 | 0.2522 | 0.2512 |
+| KNN | all_features | 203 | 0.2512 | 0.2511 |
+| Random Forest | content_basic | 17 | 0.2506 | 0.2505 |
+| Random Forest | engagement_observed | 20 | 0.2503 | 0.2502 |
+| KNN | creator | 3 | 0.2517 | 0.2496 |
+| Random Forest | temporal | 25 | 0.2496 | 0.2496 |
+| KNN | engagement_observed | 20 | 0.2496 | 0.2495 |
+| Logistic Regression | engagement_observed | 20 | 0.2533 | 0.2481 |
+| Random Forest | creator | 3 | 0.2474 | 0.2469 |
+| Logistic Regression | content_basic | 17 | 0.2440 | 0.2427 |
+| Logistic Regression | metadata | 138 | 0.2420 | 0.2416 |
+| Logistic Regression | all_features | 203 | 0.2402 | 0.2399 |
+| Logistic Regression | temporal | 25 | 0.2343 | 0.2319 |
+| Logistic Regression | creator | 3 | 0.2440 | 0.1686 |
+| Majority baseline | none | 0 | 0.2526 | 0.1008 |
+
+RQ2 final test result for the selected feature/model combination:
+
+| Model | Feature group | Columns | Accuracy | Macro F1 |
+|---|---|---:|---:|---:|
+| Random Forest | all_features | 203 | 0.2478 | 0.2475 |
+
+RQ2 test class-level report for Random Forest with all features:
+
+| Class | Precision | Recall | F1 |
+|---|---:|---:|---:|
+| declining | 0.241 | 0.235 | 0.238 |
+| rising | 0.261 | 0.271 | 0.266 |
+| seasonal | 0.252 | 0.255 | 0.253 |
+| stable | 0.235 | 0.230 | 0.233 |
+| macro avg | 0.247 | 0.248 | 0.248 |
+
+RQ2 result notes:
+- The best validation result is Random Forest using all features, with macro F1 0.2600.
+- The best individual groups are metadata with KNN or Random Forest, and temporal/content_basic with KNN, but all are close to chance-level performance.
+- The fact that all_features is best on validation suggests that combining groups helps slightly.
+- The final test result drops to macro F1 0.2475, showing that the validation advantage does not generalise strongly.
+- No single feature group provides a reliable predictive solution on the original dataset.
+
+Figure 2. RQ2 feature-group performance plot.
+
+[Insert feature-group validation macro F1 plot from notebooks/rq2_feature_group_effectiveness.ipynb.]
+
+Caption notes:
+- The plot should compare macro F1 by feature group and model.
+- Highlight that the differences between most non-baseline configurations are small.
+
+4.3 RQ3: Model Comparison
+
+RQ3 final test performance on the original processed dataset:
+
+| Model | Type | Selected hyperparameters | Accuracy | Macro F1 |
+|---|---|---|---:|---:|
+| MLP Neural Network | Neural network | alpha=0.001, hidden_layer_sizes=(64, 32) | 0.2569 | 0.2564 |
+| Linear SVM | Traditional | C=1.0 | 0.2499 | 0.2494 |
+| Random Forest | Traditional | min_samples_leaf=5, n_estimators=80 | 0.2490 | 0.2487 |
+| Logistic Regression | Traditional | C=0.1 | 0.2481 | 0.2480 |
+| Decision Tree | Traditional | max_depth=12, min_samples_leaf=20 | 0.2553 | 0.2439 |
+| Dummy Majority | Baseline | strategy=most_frequent | 0.2526 | 0.1008 |
+
+RQ3 detailed class-level observations:
+- Random Forest test macro F1: 0.249.
+- Random Forest per-class F1:
+  - declining: 0.240.
+  - rising: 0.260.
+  - seasonal: 0.258.
+  - stable: 0.236.
+- MLP test macro F1: 0.256.
+- MLP per-class F1:
+  - declining: 0.271.
+  - rising: 0.266.
+  - seasonal: 0.241.
+  - stable: 0.248.
+- The MLP improves declining and rising relative to Random Forest, but the gain is small.
+
+Figure 3. RQ3 confusion matrices for Dummy Majority, Random Forest, and MLP Neural Network.
+
+[Insert confusion matrix figure from notebooks/rq3_model_comparison.ipynb.]
+
+Caption notes:
+- The majority baseline should show predictions concentrated in one class.
+- Random Forest and MLP should show more distributed predictions, but still substantial confusion across all four labels.
+
+4.4 Cautionary ML CSV Comparison
+
+[Optional section - include only if your group wants to discuss the ML CSV.]
+
+The separate ML-ready CSV gives much stronger results:
+
+| Model | Dataset | Accuracy | Macro F1 |
+|---|---|---:|---:|
+| Random Forest | ML CSV | 0.8108 | 0.7822 |
+| MLP Neural Network | ML CSV | 0.8163 | 0.7737 |
+| Dummy Majority | ML CSV | 0.5539 | 0.1782 |
+
+Important caveat:
+- The ML CSV is not a simple row-for-row transformation of the original CSV.
+- Original CSV: 48,079 rows and 58 columns.
+- ML CSV: 50,000 rows and 32 columns.
+- The ML CSV has a skewed label distribution, with stable about 55%.
+- The ML CSV contains engineered interaction and relative-rate features not present in the original source.
+- Therefore, these results should be treated as evidence that engineered or differently generated features can greatly improve prediction, not as direct evidence that the original raw dataset supports strong prediction.
+
+
+5. Discussion
+
+[Student drafting notes - rewrite into your own prose before submission.]
+
+5.1 RQ1 Discussion: Influential Factors
+
+Main interpretation:
+- Engagement-related features are the strongest feature group in the Random Forest importance analysis.
+- The top-ranked variables include completion_rate, save_rate, like_dislike_ratio, dislike_rate, avg_watch_time_sec, comment_ratio, share_rate, saves, views, likes, comments, and engagement_total.
+- This suggests that trend labels are most associated with observed engagement behaviour rather than platform/category metadata alone.
+
+Caution:
+- Some high-ranking features are synthetic or cautionary according to the data dictionary and project notes.
+- completion_rate depends on avg_watch_time_sec, which is estimated.
+- dislike-related features depend on dislikes, which is marked synthetic.
+- creator_avg_views may be dataset-derived and should be interpreted carefully.
+- The no-synthetic/caution sensitivity check showed that removing these fields did not materially change test performance, so the main conclusion should be conservative.
+
+Recommended wording:
+- "Engagement variables were the most informative features in the model, but the low macro F1 indicates that they provide weak and unstable predictive signal rather than a reliable basis for trend classification."
+
+5.2 RQ2 Discussion: Feature Group Effectiveness
+
+Main interpretation:
+- Using all features produced the best validation result for Random Forest.
+- Metadata alone was one of the stronger individual groups, but it did not clearly outperform all other groups by a large margin.
+- Temporal, content_basic, and engagement_observed groups produced similar near-chance macro F1 scores.
+- Creator-only features were weak, especially for Logistic Regression.
+
+Why combining features helped only slightly:
+- The target labels may not be strongly separable using the current feature representation.
+- One-hot encoded metadata creates many sparse binary features.
+- Engagement features may describe popularity level but not cleanly distinguish rising, stable, declining, and seasonal trajectories.
+- Temporal features may capture broad seasonal context, but not enough time-series detail to fully model trend dynamics.
+
+Recommended wording:
+- "The feature-group experiment suggests that no single group is sufficient for robust trend prediction. Combining all groups gives the best validation macro F1, but the held-out test result remains close to chance."
+
+5.3 RQ3 Discussion: Traditional Models versus Neural Networks
+
+Main interpretation:
+- On the original dataset, the MLP has the highest test macro F1, but the improvement over traditional models is very small.
+- Linear SVM and Random Forest are close behind the MLP.
+- The Decision Tree obtains reasonable accuracy but lower macro F1, suggesting uneven class performance.
+- The majority baseline has similar accuracy to some trained models because the classes are balanced, but its macro F1 is poor because it predicts only one class.
+
+Why the neural model did not clearly win:
+- The MLP can learn non-linear feature combinations, but it still depends on useful input signal.
+- If the available features do not strongly separate the four labels, a more flexible model may not help much.
+- The Random Forest validation score does not carry over strongly to the test set, which suggests limited generalisation.
+- Model-family choice appears less important than feature quality and leakage control.
+
+Recommended wording:
+- "The RQ3 results do not support a strong claim that neural networks are superior for this task. The MLP is competitive, but the practical difference from traditional models is small on the original dataset."
+
+5.4 Overall Limitations
+
+Limitations:
+- Some columns are synthetic or synthetic-derived, so feature importance must be interpreted carefully.
+- The original dataset may not contain enough direct temporal trajectory information to distinguish the four trend labels.
+- The model grids are limited and may not represent each model's best possible performance.
+- One-hot encoding creates a high-dimensional sparse representation, especially for metadata.
+- The report does not establish causal relationships between features and trends.
+- The ML CSV produces strong results, but its provenance and relationship to the original CSV are unclear.
+
+Attempts to address limitations:
+- Obvious identifiers, free-text fields, and leakage-prone trend-duration fields were removed.
+- Train/validation/test splits were stratified.
+- Multiple metrics were used rather than accuracy alone.
+- A no-synthetic/caution sensitivity check was conducted.
+- Feature-group experiments were used to assess whether specific feature categories had stronger predictive value.
+
+
+6. Conclusion
+
+[Student drafting notes - rewrite into your own prose before submission.]
+
+RQ1 answer:
+- Engagement-related features were the most influential according to Random Forest importance.
+- However, model performance was weak, so these should be treated as exploratory associations rather than strong predictors.
+
+RQ2 answer:
+- Combining all feature groups gave the best validation result, but the final test macro F1 remained close to chance.
+- No individual feature group was sufficient for robust trend classification.
+
+RQ3 answer:
+- The MLP neural network was slightly best on test macro F1, but not by a meaningful margin.
+- Traditional models such as Linear SVM and Random Forest were competitive.
+- The main barrier appears to be weak or noisy feature signal rather than the absence of a neural architecture.
+
+Main recommendation:
+- The final report should use the original CSV as the defensible main evidence.
+- The ML CSV can be mentioned only as a cautionary comparison unless its provenance is justified.
+- Future work should prioritise transparent feature engineering, cleaner leakage control, richer temporal features, and validation on real platform data.
+
+
+7. Generative AI Usage
+
+[To be completed by group according to the assignment policy.]
+
+
+8. Bibliography
+
+[To be completed by group.]
+
+Required bibliography items:
+- Dataset citation for YouTube Shorts and TikTok Trends 2025.
+- At least two related academic papers.
+- Any software libraries or documentation cited in the report if required by the course style.
+
