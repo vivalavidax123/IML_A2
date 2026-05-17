@@ -5,7 +5,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
-df = pd.read_csv(r"C:\Users\tianj\Desktop\IML_A2\data\youtube_shorts_tiktok_trends_2025.csv_ML.csv")
+df = pd.read_csv("data/youtube_shorts_tiktok_trends_2025.csv_ML.csv")
 
 # %% Platform vs Trend Label
 platform_trend = pd.crosstab(
