@@ -275,7 +275,7 @@ RQ1 result notes:
 
 Figure 1. RQ1 feature importance plot.
 
-[Insert feature-importance figure from notebooks/rq1_influential_factors.ipynb.]
+[Insert feature-importance figure from results/figures/rq1_influential_factors_figure_02.png.]
 
 Caption notes:
 - The plot should show that engagement_observed features account for most Random Forest importance.
@@ -343,7 +343,7 @@ RQ2 result notes:
 
 Figure 2. RQ2 feature-group performance plot.
 
-[Insert feature-group validation macro F1 plot from notebooks/rq2_feature_group_effectiveness.ipynb.]
+[Insert feature-group validation macro F1 plot from results/figures/rq2_feature_group_effectiveness_figure_01.png.]
 
 Caption notes:
 - The plot should compare macro F1 by feature group and model.
@@ -379,7 +379,7 @@ RQ3 detailed class-level observations:
 
 Figure 3. RQ3 confusion matrices for Dummy Majority, Random Forest, and MLP Neural Network.
 
-[Insert confusion matrix figure from notebooks/rq3_model_comparison.ipynb.]
+[Insert confusion matrix figures from results/figures/rq3_model_comparison_figure_02.png, results/figures/rq3_model_comparison_figure_03.png, and results/figures/rq3_model_comparison_figure_04.png.]
 
 Caption notes:
 - The majority baseline should show predictions concentrated in one class.
@@ -515,4 +515,3 @@ Required bibliography items:
 - Dataset citation for YouTube Shorts and TikTok Trends 2025.
 - At least two related academic papers.
 - Any software libraries or documentation cited in the report if required by the course style.
-

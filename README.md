@@ -135,8 +135,8 @@ Evaluation metrics may include:
 ├── data/               # Dataset loading and preprocessing
 ├── notebooks/          # Jupyter notebooks for experiments and analysis
 ├── src/                # Model training and utility scripts
-├── results/            # Saved outputs, graphs, and evaluation results
-├── figures/            # Visualisations used in the report
+├── results/            # Saved outputs, metrics, graphs, and evaluation results
+│   └── figures/        # Visualisations used in the report
 ├── README.md
 └── requirements.txt
 ```
