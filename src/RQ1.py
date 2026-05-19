@@ -24,7 +24,7 @@ plt.xlabel("Platform")
 
 plt.legend(title="Trend Label")
 plt.tight_layout()
-
+plt.savefig("C:/Users/tianj/Desktop/IML_A2/figures/platform_trend.png", dpi=300)
 plt.show()
 
 # %% Category vs Trend Label
@@ -45,7 +45,7 @@ plt.xlabel("Category")
 
 plt.legend(title="Trend Label")
 plt.tight_layout()
-
+plt.savefig("C:/Users/tianj/Desktop/IML_A2/figures/category_trend.png", dpi=300)
 plt.show()
 
 # %% Traffic Source vs Trend Label
@@ -65,7 +65,7 @@ plt.xlabel("Traffic Source")
 
 plt.legend(title="Trend Label")
 plt.tight_layout()
-
+plt.savefig("C:/Users/tianj/Desktop/IML_A2/figures/traffic_source_trend.png", dpi=300)
 plt.show()
 
 # %% Creator Tier vs Trend Label
@@ -85,7 +85,7 @@ plt.xlabel("Creator Tier")
 
 plt.legend(title="Trend Label")
 plt.tight_layout()
-
+plt.savefig("C:/Users/tianj/Desktop/IML_A2/figures/creator_trend.png", dpi=300)
 plt.show()
 
 # %% Prepare the data
@@ -157,6 +157,7 @@ plt.title("Top 10 Feature Importances")
 plt.gca().invert_yaxis()
 
 plt.tight_layout()
+plt.savefig("C:/Users/tianj/Desktop/IML_A2/figures/feature_importance.png", dpi=300)
 plt.show()
 
 # %% Model evaluation
@@ -167,5 +168,3 @@ accuracy = accuracy_score(y_test, y_pred)
 print("Accuracy:", accuracy)
 
 print(classification_report(y_test, y_pred))
-
-# %%
