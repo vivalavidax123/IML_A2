@@ -1,0 +1,502 @@
+\documentclass[11pt]{article}
+
+% Change "review" to "final" to generate the final (sometimes called camera-ready) version.
+% Change to "preprint" to generate a non-anonymous version with page numbers.
+\usepackage[final]{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage{url}
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+\usepackage[T1]{fontenc}
+% For Vietnamese characters
+% \usepackage[T5]{fontenc}
+% See https://www.latex-project.org/help/documentation/encguide.pdf for other character sets
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+% This is not strictly necessary, and may be commented out,
+% but it will improve the layout of the manuscript,
+% and will typically save some space.
+\usepackage{microtype}
+
+% This is also not strictly necessary, and may be commented out.
+% However, it will improve the aesthetics of text in
+% the typewriter font.
+\usepackage{inconsolata}
+
+%Including images in your LaTeX document requires adding
+%additional package(s)
+\usepackage{graphicx}
+\graphicspath{{results/figures/}}
+
+\title{Predicting trend label with individual features, feature-groups and on different models \\ \vspace{0.5em} \large COMP90049 A2 Report - G08}
+
+
+\author{
+  Bairun Chen \quad Jingyi Tian \quad Zhencheng Zhang \quad Zeming Xia\\
+  \texttt{\{bairun.chen, jingyi.tian1, zhenchen.zhang, zemxia\}@student.unimelb.edu.au}
+}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+Short-form video platforms receive millions of new uploads every day, and video popularity can change rapidly after publication. Predicting whether a newly published video will follow a rising, stable, seasonal, or declining trend is therefore important for marketing, moderation, recommendation, and platform resource allocation.
+
+Long-term trend prediction is difficult because trajectories depend on interacting factors such as publication timing, platform context, region, creator history, content properties, and early engagement. Previous studies often rely on aggregate future views or post-hoc engagement metrics, which can introduce temporal leakage and reduce their usefulness for early-stage prediction.
+
+This study aims to answer the following three main Research Questions (RQs):
+\begin{itemize}
+    \item \textbf{RQ1 (Influential Factors)}: What are the most influential factors on video trend classification, including individual factors such as platform, region, content category, traffic source and early engagement metrics?
+    \item \textbf{RQ2 (Feature Group Effectiveness)}: What is the impact of the use of different feature groups, including content, platform, time and creator features, on the prediction performance?
+    \item \textbf{RQ3 (Model Comparison)}: What are the differences between traditional ML models and neural network models in predicting the labels of short videos?
+\end{itemize}
+
+We use the ``YouTube Shorts and TikTok Trends 2025'' dataset to answer these questions. The target variable \texttt{trend\_label} has four nearly balanced categories: declining, rising, seasonal and stable, with percentages of 24.97\%, 25.17\%, 25.26\% and 24.60\% respectively. Since all classes are important, we report Accuracy, Macro F1, Precision, Recall, and confusion matrices.
+
+\section{Related Work}
+Predicting the popularity of online videos is an important research topic. Many researchers have studied how videos attract views and how popularity changes over time. Earlier works show that early user activities are very useful for forecasting future views, but predicting different popularity trends is still a difficult task.
+
+\citet{figueiredo2014dynamics} studied the popularity patterns of YouTube videos in detail. They collected three different groups of videos: popular videos, copyright videos, and randomly sampled videos. They found that most popular videos get most of their views very early, usually in a short time after uploading. They also discovered four main popularity patterns: videos that keep growing, videos that rise then fall slowly, videos that rise then fall quickly, and videos that suddenly become popular then drop immediately. In addition, they showed that video categories, traffic sources, and early sharing behavior all influence long-term popularity. For example, videos found by YouTube search and related video recommendations often stay popular longer, while videos from external social networks usually become popular in a short time.
+
+\citet{pinto2013using} proposed prediction models using early view patterns to estimate future YouTube video popularity. Their work improved older models that only used total view counts. They designed two regression models that use daily view numbers in the early days instead of just total views. Their experiments showed that these models reduce prediction errors significantly. The models performed especially well on videos that become popular quickly then drop sharply. However, their work focused on predicting the number of future views, not classifying videos into different trend types like rising, declining, stable, or seasonal.
+
+Based on these two studies, our research continues their work. We predict four types of popularity trajectories instead of only view numbers. We also use strict data preparation methods to avoid data leakage, making our experiment more reliable and closer to real-world use.
+
+\section{Methodology}
+
+\subsection{Data Acquisition and Quality Control}
+Our primary analysis was conducted on the original CSV file (\texttt{youtube\_shorts\allowbreak\_tiktok\allowbreak\_trends\allowbreak\_2025.csv}), consisting of 48,079 rows and 58 columns, rather than the cleaned and engineered version provided for machine learning use (\texttt{youtube\_shorts\allowbreak\_tiktok\allowbreak\_trends\allowbreak\_2025\_ML.csv}). The original file contains raw features that allow for transparent preprocessing, rigorous data cleaning, and separate feature-group construction. The ML-ready CSV, which contains 50,000 rows and 32 columns, was used as an additional comparative benchmark rather than the primary experimental dataset, since the dataset documentation does not clearly state whether the extra rows and engineered features were synthetic.
+
+To begin preprocessing of the original dataset, duplicate-row checks were performed and confirmed that the raw dataframe contained 0 duplicate rows. An inspection of missing values across all columns also confirmed that no missing values were present in the dataset. Additional sanity checks were performed using \texttt{nunique()} to inspect column cardinality and verify that categorical variables had plausible values; for example, the \texttt{platform} column contained two unique values, which aligned with the dataset context. During initial data cleaning, categorical and free-text fields were converted to a standard string type, stripped of leading and trailing whitespace, and lowercased. The approximate publication date was parsed into a datetime object, from which two new temporal features were engineered: \texttt{publish\_month} (1--12) and \texttt{publish\_day} (1--31).
+
+\subsection{Feature Selection and Leakage Control}
+The target variable selected for classification was \texttt{trend\_label}, which was separated from the input feature matrix. To ensure that the model generalizes to future unseen data, a feature filtering process was implemented. Obvious leakage-prone fields, including \texttt{trend\_duration\_days} (days the video remained trending), \texttt{engagement\_velocity} (views divided by trend duration), and \texttt{trend\_type} (short, medium, or evergreen trend category), were excluded because they describe information that is only available after the trend has already occurred.
+
+Additionally, descriptive notes and high-cardinality free-text columns were excluded because they are either unique to each video or would require dedicated natural language processing techniques beyond the scope of the current pipeline. These excluded fields include \texttt{row\_id}, \texttt{source\_hint}, \texttt{notes}, \texttt{title}, \texttt{title\_keywords}, \texttt{tags}, \texttt{sample\_comments}, \texttt{author\_handle}, \texttt{music\_track}, \texttt{publish\_date\_approx}, and \texttt{year\_month}. After filtering, the resulting dataset prior to one-hot encoding contained 48,079 rows and 45 columns.
+
+A sensitivity check was also designed to evaluate the impact of potentially synthetic columns. According to \texttt{DATA\_DICTIONARY.csv}, several engagement-related features were declared synthetic or estimated, including \texttt{author\_handle}, \texttt{trend\_duration\_days}, \texttt{dislikes}, \texttt{sample\_comments}, \texttt{title}, and \texttt{avg\_watch\_time\_sec}. An alternative preprocessing pipeline was therefore run with these columns removed. Although this did not necessarily improve model performance, it provides an important sensitivity analysis for checking whether individual feature-importance or feature-group-importance findings are dominated by synthetic fields.
+
+\subsection{Categorical Encoding and Imputation}
+The dataset contained a mixture of categorical, numerical, and binary indicator variables, so different preprocessing strategies were applied depending on feature type. Sixteen categorical columns were transformed using one-hot encoding with \texttt{pandas.get\_dummies()}. This converted each category into a separate binary feature, allowing non-ordinal variables such as \texttt{platform}, \texttt{country}, \texttt{region}, \texttt{language}, \texttt{category}, \texttt{device\_type}, \texttt{traffic\_source}, and \texttt{creator\_tier} to be represented numerically without implying a natural ranking between categories.
+
+The remaining 29 numerical columns were retained on their original continuous scales because they already represented measurable quantities such as views, likes, engagement rate, duration, completion rate, and creator average views. Boolean indicator variables, including \texttt{has\_emoji} and \texttt{is\_weekend}, were encoded as 0/1 values, where 1 indicates the presence of the condition and 0 indicates its absence. Any missing values were handled before modelling to ensure that all features were complete and suitable for machine learning algorithms.
+
+Although the original CSV did not contain missing values, this step improves the robustness and generalizability of the model when applied to future unseen data. The final encoded shape of the dataset was $48{,}079 \times 203$.
+
+\subsection{Feature Grouping}
+After preprocessing, the remaining features were categorized into five distinct groups to support Research Question 2, which evaluates model performance using thematic groups of features rather than only individual features. The feature groups are as follows:
+
+\begin{itemize}
+    \item \textbf{\texttt{engagement\_observed}} (20 encoded columns): Observational engagement metrics and calculated rates, including views, likes, comments, shares, saves, \texttt{engagement\_rate}, \texttt{comment\_ratio}, \texttt{share\_rate}, \texttt{save\_rate}, and \texttt{like\_rate}.
+    \item \textbf{\texttt{temporal}} (25 encoded columns): Calendar and clock-time indicators, including \texttt{week\_of\_year}, \texttt{upload\_hour}, \texttt{publish\_dayofweek}, \texttt{publish\_period}, \texttt{event\_season}, \texttt{season}, \texttt{is\_weekend}, \texttt{publish\_month}, and \texttt{publish\_day}.
+    \item \textbf{\texttt{metadata}} (138 encoded columns): Platform and device categories, including \texttt{platform}, \texttt{country}, \texttt{region}, \texttt{language}, \texttt{category}, \texttt{hashtag}, \texttt{sound\_type}, \texttt{device\_type}, \texttt{device\_brand}, and \texttt{traffic\_source}.
+    \item \textbf{\texttt{content\_basic}} (17 encoded columns): Basic structural properties of the video, including \texttt{genre}, \texttt{duration\_sec}, \texttt{title\_length}, and \texttt{has\_emoji}.
+    \item \textbf{\texttt{creator}} (3 encoded columns): Attributes describing the creator, including historical \texttt{creator\_avg\_views} and \texttt{creator\_tier}.
+\end{itemize}
+
+\subsection{Partitioning and Stratification}
+To support reliable model evaluation and reduce the risk of overfitting, the processed dataset was divided into three independent subsets: training, validation, and test sets. A 70/15/15 split was selected after considering the size of the dataset and the need to preserve enough samples for both model development and final evaluation. This produced the following partitions:
+
+\begin{itemize}
+    \item \textbf{Training Set} (33,655 samples): Used exclusively to fit the machine learning models.
+    \item \textbf{Validation Set} (7,212 samples): Used during hyperparameter tuning and model selection to compare candidate models without touching the final test set.
+    \item \textbf{Test Set} (7,212 samples): Held out completely during training and tuning, and used only once as the final independent benchmark of model generalizability.
+\end{itemize}
+
+Stratified sampling was applied during partitioning to preserve the original distribution of the four target classes: \texttt{rising}, \texttt{declining}, \texttt{stable}, and \texttt{seasonal}. This was important because changes in class proportions across the training, validation, and test sets could distort model performance estimates, especially when using F1-score as an evaluation metric. By maintaining similar class distributions in each subset, the validation and test results are more representative of the full dataset.
+
+The 70/15/15 split is appropriate for this dataset because it provides the model with a large training set while still leaving more than 7,000 observations in both the validation and test sets. This gives enough data for robust hyperparameter tuning and meaningful final evaluation without sacrificing too much information from the training process.
+
+\subsection{Model Architectures and Hyperparameter Configuration}
+
+Different model configurations were used for the three research questions, reflecting their different experimental purposes. RQ1 focused on interpretability through feature importance, RQ2 examined the predictive value of different feature groups, and RQ3 compared model families under a shared evaluation setup.
+
+For RQ1 (Influential Factors), a Random Forest classifier was trained on the training partition and evaluated on both the validation and test sets. Random Forest was selected because it can model non-linear relationships and provides feature-importance scores through mean decrease in impurity (MDI). These importance scores were used to identify which features contributed most strongly to the model's predictions. A dummy majority classifier, which always predicts the most frequent class, was included as a baseline.
+
+For RQ2 (Feature Group Effectiveness), three model families were trained separately on each predefined feature group: Logistic Regression, K-Nearest Neighbors (KNN), and Random Forest. This allowed the predictive contribution of each thematic feature block, such as engagement, temporal, metadata, content, and creator-related features, to be compared under multiple modelling assumptions. The same dummy majority baseline was used as a reference point.
+
+For RQ3 (Model Comparison), a broader set of models was benchmarked using the full processed feature set. The models were selected to cover a range of model complexity, from simple baselines and linear classifiers to tree-based models and a neural network:
+
+\begin{itemize}
+    \item \textbf{Dummy Classifier} (Baseline): \texttt{strategy=``most\_frequent''}.
+    \item \textbf{Logistic Regression} (Traditional Linear): regularized linear classifier, tuned with $C=0.1$.
+    \item \textbf{Linear SVM} (Traditional Margin-Based): linear maximum-margin classifier, tuned with $C=1.0$.
+    \item \textbf{Decision Tree} (Traditional Non-Linear): tuned with \texttt{max\_depth=12} and \texttt{min\_samples\_leaf=20}.
+    \item \textbf{Random Forest} (Ensemble): tuned with \texttt{n\_estimators=80} and \texttt{min\_samples\_leaf=5}.
+    \item \textbf{Multi-Layer Perceptron (MLP) Neural Network} (Neural Network): tuned with hidden layer sizes of \texttt{(64, 32)} and L2 regularization parameter $\alpha=0.001$.
+\end{itemize}
+
+Hyperparameters were selected using validation Macro F1. The test set was kept separate from model selection and was used only for final evaluation, reducing the risk of selecting models that perform well only on the test partition.
+
+\section{Empirical Evaluation}
+
+\subsection{RQ1: Feature Importance Analysis}
+
+To investigate which individual features were most important for short-form video trend classification, a Random Forest classifier was trained using the training split. Table~\ref{tab:rq1_perf} shows the validation and test performance of the Random Forest model compared with the Dummy Majority baseline.
+
+\begin{table}[h]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llcc}
+\hline
+\textbf{Model} & \textbf{Split} & \textbf{Accuracy} & \textbf{Macro F1} \\
+\hline
+Random Forest & Validation & 0.2622 & 0.2621 \\
+Majority baseline & Validation & 0.2526 & 0.1008 \\
+Random Forest & Test & 0.2454 & 0.2454 \\
+Majority baseline & Test & 0.2526 & 0.1008 \\
+\hline
+\end{tabular}%
+}
+\caption{RQ1 Model Performance Comparison}
+\label{tab:rq1_perf}
+\end{table}
+
+Although the Random Forest model achieved a higher Macro F1 score than the majority baseline, its test accuracy remained close to the baseline accuracy. This indicates that the model only extracted a weak signal from the available features.
+
+To analyze class-level performance, the validation partition classification report is presented in Table~\ref{tab:rf_class_report}.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\hline
+\textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} \\
+\hline
+declining & 0.250 & 0.248 & 0.249 \\
+rising & 0.264 & 0.273 & 0.268 \\
+seasonal & 0.289 & 0.279 & 0.284 \\
+stable & 0.246 & 0.248 & 0.247 \\
+\hline
+\textbf{macro avg} & \textbf{0.262} & \textbf{0.262} & \textbf{0.262} \\
+\hline
+\end{tabular}
+\caption{Random Forest Class-Level Validation Report}
+\label{tab:rf_class_report}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{rq1_influential_factors_figure_01.png}
+\caption{Random Forest validation confusion matrix for the four trend classes.}
+\label{fig:rq1_validation_confusion}
+\end{figure}
+
+The model performed slightly better on the \texttt{seasonal} class, with an F1 score of 0.284, and the \texttt{rising} class, with an F1 score of 0.268. In comparison, the \texttt{stable} and \texttt{declining} classes had lower F1 scores, indicating that these classes were more difficult for the model to distinguish.
+
+The individual features were ranked using Mean Decrease in Impurity (MDI) importance from the Random Forest model. Table~\ref{tab:top10_features} presents the top 10 highest-ranked features, and Figure~\ref{fig:rq1_feature_importance} visualizes the broader ranking.
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{cllc}
+\hline
+\textbf{Rank} & \textbf{Feature Name} & \textbf{Group} & \textbf{MDI Val} \\
+\hline
+1 & completion\_rate & engagement\_observed & 0.0332 \\
+2 & save\_rate & engagement\_observed & 0.0326 \\
+3 & creator\_avg\_views & creator & 0.0324 \\
+4 & like\_dislike\_ratio & engagement\_observed & 0.0321 \\
+5 & dislike\_rate & engagement\_observed & 0.0320 \\
+6 & avg\_watch\_time\_sec & engagement\_observed & 0.0312 \\
+7 & comment\_ratio & engagement\_observed & 0.0312 \\
+8 & share\_rate & engagement\_observed & 0.0311 \\
+9 & engagement\_share\_rate & engagement\_observed & 0.0308 \\
+10 & saves & engagement\_observed & 0.0305 \\
+\hline
+\end{tabular}%
+}
+\caption{Top 10 Most Important Individual Features}
+\label{tab:top10_features}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{rq1_influential_factors_figure_02.png}
+\caption{Top influential factors ranked by Random Forest importance.}
+\label{fig:rq1_feature_importance}
+\end{figure}
+
+The highest-ranked individual features were mostly engagement-related variables, including \texttt{completion\_rate}, \texttt{save\_rate}, \texttt{like\_dislike\_ratio}, \texttt{dislike\_rate}, and \texttt{share\_rate}. These rankings suggest that the Random Forest relied more on observed engagement patterns than on static metadata. However, because MDI importance can be biased toward continuous variables or features with many split points, the rankings are treated as model-based associations rather than causal explanations.
+
+The sensitivity analysis produced a similar result: after removing eight synthetic, estimated, or cautionary columns, including \texttt{dislikes}, \texttt{completion\_rate}, and \texttt{creator\_avg\_views}, the ``No-Synthetic'' Random Forest achieved a test Macro F1 of 0.2457, compared with 0.2454 for the original model.
+
+\subsection{RQ2: Feature Group Ablation Studies}
+
+To determine how effective different feature groups were at predicting trend labels, ablation experiments were conducted using each predefined feature group. Table~\ref{tab:group_dims} lists the number of encoded columns in each group after one-hot encoding.
+
+\begin{table}[h]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lc}
+\hline
+\textbf{Feature Group} & \textbf{Number of Encoded Columns} \\
+\hline
+all\_features & 203 \\
+metadata & 138 \\
+temporal & 25 \\
+engagement\_observed & 20 \\
+content\_basic & 17 \\
+creator & 3 \\
+\hline
+\end{tabular}%
+}
+\caption{Encoded Feature Group Dimensions}
+\label{tab:group_dims}
+\end{table}
+
+In addition to the ablation experiments, Random Forest MDI scores were aggregated by feature group to provide a model-based view of how much each group contributed to the fitted classifier. These aggregated importances are reported in Table~\ref{tab:group_mdi}.
+
+\begin{table}[h]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lc}
+\hline
+\textbf{Feature Group} & \textbf{Total MDI Importance} \\
+\hline
+engagement\_observed & 0.6048 \\
+temporal & 0.1526 \\
+metadata & 0.1395 \\
+content\_basic & 0.0707 \\
+creator & 0.0325 \\
+\hline
+\end{tabular}%
+}
+\caption{Aggregated Feature Group MDI Importances}
+\label{tab:group_mdi}
+\end{table}
+
+The aggregated MDI results show that \texttt{engagement\_observed} features accounted for the largest share of Random Forest importance. Temporal and metadata features provided smaller secondary contributions, while \texttt{content\_basic} and \texttt{creator} features contributed less. These values should be interpreted cautiously because feature groups contain different numbers of encoded columns, and MDI importance can be affected by feature type and split frequency.
+
+Table~\ref{tab:ablation_results} shows the validation Macro F1 and accuracy scores achieved by three machine learning models, Logistic Regression, KNN, and Random Forest, across all feature group combinations. Figure~\ref{fig:rq2_feature_groups} provides a compact visual comparison of the same validation Macro F1 results.
+
+\begin{table*}[t]
+\centering
+\begin{tabular}{llccc}
+\hline
+\textbf{Model} & \textbf{Feature Group} & \textbf{Columns} & \textbf{Accuracy} & \textbf{Macro F1} \\
+\hline
+Random Forest & all\_features & 203 & 0.2601 & 0.2600 \\
+KNN & metadata & 138 & 0.2546 & 0.2546 \\
+Random Forest & metadata & 138 & 0.2547 & 0.2545 \\
+KNN & temporal & 25 & 0.2539 & 0.2517 \\
+KNN & content\_basic & 17 & 0.2522 & 0.2512 \\
+KNN & all\_features & 203 & 0.2512 & 0.2511 \\
+Random Forest & content\_basic & 17 & 0.2506 & 0.2505 \\
+Random Forest & engagement\_observed & 20 & 0.2503 & 0.2502 \\
+KNN & creator & 3 & 0.2517 & 0.2496 \\
+Random Forest & temporal & 25 & 0.2496 & 0.2496 \\
+KNN & engagement\_observed & 20 & 0.2496 & 0.2495 \\
+Logistic Regression & engagement\_observed & 20 & 0.2533 & 0.2481 \\
+Random Forest & creator & 3 & 0.2474 & 0.2469 \\
+Logistic Regression & content\_basic & 17 & 0.2440 & 0.2427 \\
+Logistic Regression & metadata & 138 & 0.2420 & 0.2416 \\
+Logistic Regression & all\_features & 203 & 0.2402 & 0.2399 \\
+Logistic Regression & temporal & 25 & 0.2343 & 0.2319 \\
+Logistic Regression & creator & 3 & 0.2440 & 0.1686 \\
+Majority baseline & none & 0 & 0.2526 & 0.1008 \\
+\hline
+\end{tabular}
+\caption{Feature Group Ablation Validation Results}
+\label{tab:ablation_results}
+\end{table*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{rq2_feature_group_effectiveness_figure_01.png}
+\caption{Validation Macro F1 by feature group and model.}
+\label{fig:rq2_feature_groups}
+\end{figure}
+
+The best validation configuration was Random Forest trained on \texttt{all\_features}, achieving a validation Macro F1 of 0.2600. Among individual feature groups, the highest single-group validation Macro F1 was 0.2546 for \texttt{metadata} using KNN, followed by 0.2517 for \texttt{temporal} using KNN. However, these differences were small, and most results remained close to the expected level for a balanced four-class classification task.
+
+The best validation configuration was then evaluated on the held-out test set, which was not used during training or model selection. Its test Macro F1 decreased to 0.2475, indicating that the validation advantage of combining all feature groups did not generalize strongly.
+
+\begin{table}[h]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llccc}
+\hline
+\textbf{Model} & \textbf{Group} & \textbf{Cols} & \textbf{Accuracy} & \textbf{Macro F1} \\
+\hline
+Random Forest & all\_features & 203 & 0.2478 & 0.2475 \\
+\hline
+\end{tabular}%
+}
+\caption{Selected RQ2 Configuration Test Performance}
+\label{tab:rq2_test}
+\end{table}
+
+\begin{table}[h]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lccc}
+\hline
+\textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} \\
+\hline
+declining & 0.241 & 0.235 & 0.238 \\
+rising & 0.261 & 0.271 & 0.266 \\
+seasonal & 0.252 & 0.255 & 0.253 \\
+stable & 0.235 & 0.230 & 0.233 \\
+\hline
+\textbf{macro avg} & \textbf{0.247} & \textbf{0.248} & \textbf{0.248} \\
+\hline
+\end{tabular}%
+}
+\caption{Selected RQ2 Configuration Class-Level Test Report}
+\label{tab:rq2_test_class}
+\end{table}
+
+The class-level test results in Table~\ref{tab:rq2_test_class} further show that the selected model struggled across all four trend categories. Overall, the RQ2 results indicate that changing the feature group had only a limited effect on predictive performance.
+
+\subsection{RQ3: Multi-Model Performance Benchmarking}
+
+Six model types were benchmarked on the original preprocessed dataset. Hyperparameters were selected using validation Macro F1, and the selected models were then evaluated on the held-out test set. Figure~\ref{fig:rq3_model_validation} shows the validation comparison used during model selection, while Table~\ref{tab:rq3_benchmarks} shows the final test results.
+
+\begin{table*}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccc}
+\hline
+\textbf{Model} & \textbf{Model Family} & \textbf{Validation-Selected Hyperparameters} & \textbf{Test Accuracy} & \textbf{Test Macro F1} \\
+\hline
+MLP Neural Network & Neural Network & \texttt{alpha=0.001, hidden\_layer\_sizes=(64, 32)} & \textbf{0.2569} & \textbf{0.2564} \\
+Linear SVM & Traditional & \texttt{C=1.0} & 0.2499 & 0.2494 \\
+Random Forest & Traditional & \texttt{min\_samples\_leaf=5, n\_estimators=80} & 0.2490 & 0.2487 \\
+Logistic Regression & Traditional & \texttt{C=0.1} & 0.2481 & 0.2480 \\
+Decision Tree & Traditional & \texttt{max\_depth=12, min\_samples\_leaf=20} & 0.2553 & 0.2439 \\
+Dummy Majority & Baseline & \texttt{strategy=``most\_frequent''} & 0.2526 & 0.1008 \\
+\hline
+\end{tabular}%
+}
+\caption{RQ3 Model Benchmarking Test Results}
+\label{tab:rq3_benchmarks}
+\end{table*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{rq3_model_comparison_figure_01.png}
+\caption{Validation Macro F1 comparison between traditional models and the neural network.}
+\label{fig:rq3_model_validation}
+\end{figure}
+
+The MLP Neural Network achieved the highest test Macro F1 score, with a Macro F1 of 0.2564 and an accuracy of 0.2569. However, the improvement over the best traditional model, Linear SVM, was small: approximately 0.0070 in Macro F1. Random Forest and Logistic Regression also produced similar test Macro F1 scores, indicating that changing model family had only a limited effect on predictive performance.
+
+Although the Decision Tree achieved a relatively high test accuracy of 0.2553, its Macro F1 score was lower at 0.2439. This indicates that accuracy alone is less informative for this task, and Macro F1 is more appropriate because it gives equal weight to all four trend classes.
+
+Per-class F1 results show that the MLP performed slightly better than Random Forest on the \texttt{declining}, \texttt{rising}, and \texttt{stable} classes, but worse on the \texttt{seasonal} class. Since these differences were small and no statistical significance test was conducted, the results should be interpreted as weak evidence of model-level differences rather than a clear advantage for neural networks.
+
+\begin{figure*}[t]
+\centering
+\begin{minipage}{0.32\textwidth}
+\centering
+\includegraphics[width=\linewidth]{rq3_model_comparison_figure_02.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\textwidth}
+\centering
+\includegraphics[width=\linewidth]{rq3_model_comparison_figure_03.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.32\textwidth}
+\centering
+\includegraphics[width=\linewidth]{rq3_model_comparison_figure_04.png}
+\end{minipage}
+\caption{Test confusion matrices for Random Forest, MLP Neural Network, and Dummy Majority models.}
+\label{fig:rq3_test_confusions}
+\end{figure*}
+
+\subsection{Comparative Analysis on the ML-Ready dataset}
+For comparative analysis, the optimal models were also trained and evaluated on the alternative ML-ready dataset, \texttt{youtube\_shorts\allowbreak\_tiktok\allowbreak\_trends\allowbreak\_2025.csv\_ML.csv}. The results are reported in Table~10.
+
+\begin{table}[h]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llcc}
+\hline
+\textbf{Model} & \textbf{Dataset} & \textbf{Accuracy} & \textbf{Macro F1} \\
+\hline
+Random Forest & ML CSV & 0.8108 & 0.7822 \\
+MLP Neural Network & ML CSV & 0.8163 & 0.7737 \\
+Dummy Majority & ML CSV & 0.5539 & 0.1782 \\
+\hline
+\end{tabular}%
+}
+\caption{ML-Ready Dataset Performance Comparison}
+\label{tab:ml_csv_results}
+\end{table}
+
+Models trained on the ML-ready variant achieved substantially higher classification performance, with accuracy exceeding 81\% and Macro F1 exceeding 78\%. However, these results should be interpreted with caution and should not be treated as directly generalizable to the original raw dataset. As discussed in Section~3, the ML-ready file differs from the raw dataset in several important ways. It contains a different number of observations, with 50,000 rows compared with 48,079 in the raw dataset, and it has a more imbalanced target distribution, with the majority \texttt{stable} class accounting for 55.39\% of samples.
+
+In addition, the ML-ready dataset includes engineered interaction terms and relative performance metrics that appear to encode more complex relationships than those available in the raw feature set. While these features may improve predictive performance, they also make the comparison less direct and may introduce target-related information into the modelling process. Therefore, the stronger results on the ML-ready variant are best understood as a demonstration of how dataset composition, class distribution, and post-hoc feature engineering can substantially inflate performance metrics.
+
+For this reason, the primary conclusions of this report are based on the modelling results from the raw dataset pipeline, while the ML-ready variant is treated as a supplementary comparison rather than the main benchmark.
+
+\section{General Discussion}
+
+\subsection{RQ1 Discussion: Influence of Early Engagement}
+The RQ1 results suggest that early audience interaction was more informative than static video metadata. This is consistent with prior work on online video popularity, where early engagement often reflects whether recommendation systems and viewers are beginning to amplify a video.
+
+However, the feature-importance results should not be interpreted as evidence that these variables can reliably determine trend type. They mainly show which inputs the Random Forest used most often when splitting the data. Since the model's predictive performance was weak, these variables are better understood as modest signals rather than strong explanatory factors.
+
+The sensitivity analysis also suggests that synthetic or estimated fields were not the main reason for the poor performance. Removing them did not materially change the result, so the broader limitation appears to be the lack of trajectory-level information rather than a single problematic feature subset.
+
+\subsection{RQ2 Discussion: Limits of Static Metadata Groups}
+The RQ2 ablation results show that the predefined feature groups captured only limited information about future trend shape. Even when all feature groups were combined, the validation improvement did not translate into strong held-out performance.
+
+This points to several constraints in the feature representation. Platform metadata is high-dimensional and sparse after one-hot encoding, which can weaken linear and distance-based models. Aggregate engagement metrics indicate how much attention a video received, but they do not show how that attention evolved over time. Similarly, publication hour and weekday provide only coarse temporal context, whereas short-form video discovery is shaped by faster recommendation and interaction dynamics.
+
+Thus, simply combining raw and static feature groups is not enough to tackle the high class overlap in popularity trends.
+
+\subsection{RQ3 Discussion: Traditional Models vs. Neural Networks}
+The RQ3 results suggest that increasing model complexity did not substantially improve trend classification. The MLP achieved the best Macro F1, but its advantage over Linear SVM, Random Forest, and Logistic Regression was very small. This indicates that the main bottleneck was not the choice of classifier, but the limited separability of the input representation.
+
+Traditional models remain useful in this setting because they produced comparable results while being easier to interpret and cheaper to train. The neural network's small gain may reflect its ability to capture some non-linear interactions, but the static metadata and aggregate engagement features still do not provide enough information to clearly distinguish trajectory types.
+
+\subsection{Limitations}
+This study has several important limitations. First, some features in the dataset are synthetic or estimated, which may affect interpretation of feature importance. Second, the dataset only includes static metadata and aggregate engagement values. It does not provide detailed time-series view records, which are important for identifying long-term popularity trends. Third, the range of tested model settings is limited, so fully optimized model performance is not guaranteed.
+
+Several strict steps are used to ensure reliable experimental results. Identifiers and text features that cannot be generalized are removed. Features that depend on final trend results are also excluded. These features include \texttt{trend\_duration\_days}, \texttt{trend\_type}, and \texttt{engagement\_velocity}.
+
+All data splits use stratification to keep balanced class distributions. All preprocessing rules are learned only from the training set.
+
+In addition, experiments on a processed ML dataset show unrealistically high performance. This outcome is caused by imbalanced classes and later-stage feature engineering. This comparison provides a useful warning for future research on video popularity prediction.
+
+
+\section{Conclusion and Future Directions}
+In this project, we investigated whether metadata, temporal features, and engagement-related features can help classify short-form videos into four trend categories: declining, rising, seasonal, and stable.
+
+Our key findings across the three research questions are:
+\begin{itemize}
+    \item \textbf{RQ1 (Influential Factors)}: Engagement-related variables were the most important features in the Random Forest model, but their predictive value was still limited.
+
+    \item \textbf{RQ2 (Feature Group Effectiveness)}: No individual feature group, nor the combined feature set, produced strong generalizable performance.
+
+    \item \textbf{RQ3 (Model Comparison)}: The MLP neural network performed best, but only by a small margin over traditional models.
+\end{itemize}
+
+Overall, the results show that predicting short-form video trend trajectories using only static metadata and aggregate engagement statistics is difficult. Future work could improve performance by using richer temporal information, user interaction patterns, and multimodal features such as video, audio, and text embeddings. Continued control of potential data leakage is also necessary.
+
+\section*{Generative AI Usage Statement}
+
+Generative AI tools were used only for idea generation and brainstorming during the early planning stage of the project, including assistance with refining research-question directions.
+
+All preprocessing, feature engineering, machine learning models, hyperparameter tuning, data analysis, result interpretation, and report writing were completed, implemented, and verified by group members.
+
+\section*{Dataset Sources}
+\textbf{Original version}: \url{https://www.kaggle.com/datasets/tarekmasryo/youtube-shorts-and-tiktok-trends-2025?select=youtube_shorts_tiktok_trends_2025.csv}
+
+\textbf{ML-ready version}: \url{https://www.kaggle.com/datasets/tarekmasryo/youtube-shorts-and-tiktok-trends-2025?select=youtube_shorts_tiktok_trends_2025.csv_ML.csv}
+
+% Bibliography entries for the entire Anthology, followed by custom entries
+%\bibliography{anthology,custom}
+% Custom bibliography entries only
+\bibliography{custom}
+
+\end{document}
